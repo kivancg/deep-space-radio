@@ -78,7 +78,12 @@
   input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--sand),var(--down))}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7.5px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px rgba(232,234,246,.15)}
   input[type=range]::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;background:var(--ink)}
-  .vol{width:90px}
+  .console input.vol{width:90px;flex:none}
+  .tuner{display:grid;gap:3px;font-size:12px;color:var(--dim);width:220px;flex:none}
+  .tuner select{font:inherit;font-size:14px;color:var(--ink);background:rgba(13,18,48,.6);border:1px solid var(--line);
+    border-radius:8px;padding:5px 8px;cursor:pointer;width:100%;min-width:0}
+  .tuner select:focus-visible{outline:2px solid var(--down);outline-offset:2px}
+  .tuner a{color:var(--sand)}
   .meta{font-size:12px;color:var(--dim);line-height:1.35;min-width:120px}
   .meta b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
   .status{display:inline-flex;align-items:center;gap:6px}
@@ -88,14 +93,16 @@
   .brand .note{margin-top:10px;font-size:12.5px;max-width:34ch;opacity:.8}
 
   @media (max-width:980px){
-    .onair{top:auto;bottom:118px;right:12px;left:12px;width:auto;max-height:30vh;
+    .onair{top:auto;bottom:178px;right:12px;left:12px;width:auto;max-height:30vh;
       background:rgba(13,18,48,.78);backdrop-filter:blur(10px);padding:12px 16px;border-radius:16px;border:1px solid var(--line)}
     .onair h2{font-size:20px}.onair .sub{display:none}
     .note{display:none}
     .brand p{display:none}
     .console{gap:14px;padding:10px 16px 10px 10px;width:calc(100% - 24px);justify-content:space-between}
     .blend{grid-template-columns:auto 1fr auto;flex:1}
-    .vol,.meta{display:none}
+    .console input.vol,.meta,.tuner label,.tuner small{display:none}
+    .tuner{width:100%;order:3}
+    .console{flex-wrap:wrap;border-radius:24px;row-gap:8px}
   }
   @media (prefers-reduced-motion:reduce){ .link.enter,.heard,.heard .arc{animation:none} }
 </style>
@@ -108,7 +115,7 @@
   <h1>Deep Space <em>Radio</em></h1>
   <p>Three giant dish sites keep Earth in touch with every spacecraft beyond the Moon. Each link plays an instrument: far away sounds low, more data plays more notes.</p>
   <p class="note" id="note"></p>
-  <p class="note">Space recordings: NASA, JPL and the University of Iowa. The music follows the network; the recordings are from past missions.</p>
+  <p class="note">Music: live radio from SomaFM, listener-supported. Space recordings: NASA, JPL and the University of Iowa. The spacecraft notes follow the live network; the recordings are from past missions.</p>
 </header>
 
 <aside class="onair" aria-live="polite">
@@ -125,9 +132,14 @@
   </button>
   <div class="blend">
     <label for="blend">Mix</label>
-    <span>Lo-fi</span>
+    <span>Radio</span>
     <input id="blend" type="range" min="0" max="1" step="0.01" value="0.55">
     <span>Deep space</span>
+  </div>
+  <div class="tuner">
+    <label for="station">Station</label>
+    <select id="station"></select>
+    <small id="stationStatus">Press play to tune in</small>
   </div>
   <input class="vol" id="vol" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
   <div class="meta">
@@ -165,6 +177,33 @@ const LAND_DOTS = 'MN8PwjDfaMUw38HIMN8azDDfc88w383SMN8m1jDff9kw39jcMN8x4DDfiuMw3
    craft: spacecraft codes that make a clip more likely while on air.
    maxSeconds: longer files play a random excerpt of this length.
 ------------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   LO-FI TRACKS
+   Put your tracks in a "music" folder next to this page. They play
+   shuffled with crossfades. key: the track's key (e.g. 'A' for A minor)
+   so the spacecraft notes fit; leave it out to use DEFAULT_KEY.
+------------------------------------------------------------------- */
+const DEFAULT_KEY = 'D';
+
+/* ------------------------------------------------------------------
+   LIVE RADIO
+   The base music is a live internet radio stream. Add any station
+   that offers a direct https stream URL (MP3 or AAC).
+   "My tracks" plays the files listed in MUSIC instead.
+------------------------------------------------------------------- */
+const STATIONS = [
+  { name: 'Groove Salad', by: 'SomaFM', url: 'https://ice2.somafm.com/groovesalad-128-mp3', page: 'https://somafm.com/groovesalad/' },
+  { name: 'Space Station Soma', by: 'SomaFM', url: 'https://ice2.somafm.com/spacestation-128-mp3', page: 'https://somafm.com/spacestation/' },
+  { name: 'Deep Space One', by: 'SomaFM', url: 'https://ice2.somafm.com/deepspaceone-128-mp3', page: 'https://somafm.com/deepspaceone/' },
+  { name: 'My tracks', local: true },
+];
+const MUSIC = [
+  { file: 'music/track1.mp3' },
+  { file: 'music/track2.mp3' },
+  { file: 'music/track3.mp3' },
+  { file: 'music/track4.mp3' },
+];
+
 const SOUNDS = [
   { file: 'sound/voyager1.mp4', title: 'Voyager 1 in interstellar space', year: '2012\u201313', craft: ['VGR1'], maxSeconds: 28, credit: 'NASA/JPL-Caltech/University of Iowa' },
   { file: 'sound/V2PWS_Jupiter_1979-07-02T1556-1645.mp3', title: 'Voyager 2 approaching Jupiter', year: '1979', craft: ['VGR2'], maxSeconds: 25, credit: 'NASA/University of Iowa' },
@@ -310,7 +349,7 @@ async function getLinks() {
 /* ---------------- three.js scene ---------------- */
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setClearColor(0x0D1230);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
@@ -495,202 +534,260 @@ async function refresh() {
 /* ---------------- audio ---------------- */
 const audio = (() => {
   const T = window.Tone; if (!T) return {};
+  // bigger scheduling buffer: steadier sound while the globe is rendering
+  T.getContext().lookAhead = 0.25;
+  const ctx = T.getContext().rawContext;
   const A = { started: false };
-  const master = new T.Volume(-4); const limiter = new T.Limiter(-2);
+
+  const master = new T.Volume(-3); const limiter = new T.Limiter(-1.5);
   master.chain(limiter, T.Destination);
-  const lofiBus = new T.Gain(1); const lofiTone = new T.Filter(3600, 'lowpass');
-  const duck = new T.Gain(1); lofiBus.chain(duck, lofiTone, master);
-  const spaceBus = new T.Gain(1); const verb = new T.Reverb({ decay: 9, wet: 0.45 }); const echo = new T.FeedbackDelay('8n.', 0.32);
-  echo.wet.value = 0.22; spaceBus.chain(echo, verb, master);
+  const musicBus = new T.Gain(1); const duck = new T.Gain(1);
+  musicBus.chain(duck, master);
+  const spaceBus = new T.Gain(1);
+  const echo = new T.FeedbackDelay('8n.', 0.3); echo.wet.value = 0.25;
+  const verb = new T.Reverb({ decay: 7, wet: 0.45 });
+  spaceBus.chain(echo, verb, master);
+  const recBus = new T.Gain(1); const recHP = new T.Filter(90, 'highpass');
+  recBus.chain(recHP, master);
 
-  // lo-fi: rhodes
-  const wow = new T.Vibrato(0.5, 0.06); const trem = new T.Tremolo(3.2, 0.22).start();
-  const keysF = new T.Filter(1900, 'lowpass');
-  const keys = new T.PolySynth(T.FMSynth, {
-    harmonicity: 2, modulationIndex: 1.8, oscillator: { type: 'sine' }, modulation: { type: 'sine' },
-    envelope: { attack: 0.01, decay: 1.6, sustain: 0.25, release: 1.8 }, modulationEnvelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.8 },
-  });
-  keys.volume.value = -15; keys.chain(trem, wow, keysF, lofiBus);
-  const bass = new T.MonoSynth({ oscillator: { type: 'triangle' }, filter: { Q: 1, type: 'lowpass' },
-    envelope: { attack: 0.02, decay: 0.4, sustain: 0.6, release: 0.6 }, filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.4, baseFrequency: 160, octaves: 1.6 } });
-  bass.volume.value = -12; bass.connect(lofiBus);
-  // drums
-  const drumBus = new T.Filter(4800, 'lowpass'); const grit = new T.Distortion(0.12); drumBus.chain(grit, lofiBus);
-  const kick = new T.MembraneSynth({ pitchDecay: 0.045, octaves: 5, envelope: { attack: 0.001, decay: 0.38, sustain: 0 } });
-  kick.volume.value = -8; kick.connect(drumBus);
-  const snF = new T.Filter(1900, 'bandpass'); snF.Q.value = 0.8; snF.connect(drumBus);
-  const snare = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.17, sustain: 0 } });
-  snare.volume.value = -14; snare.connect(snF);
-  const hatF = new T.Filter(7500, 'highpass'); hatF.connect(drumBus);
-  const hat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.04, sustain: 0 } });
-  hat.volume.value = -26; hat.connect(hatF);
-  // vinyl
-  const vinyl = new T.Noise('pink'); const vinylF = new T.Filter(1400, 'highpass'); vinyl.volume.value = -42; vinyl.chain(vinylF, lofiBus);
-  const crackle = new T.NoiseSynth({ noise: { type: 'brown' }, envelope: { attack: 0.0005, decay: 0.006, sustain: 0 } });
-  crackle.volume.value = -24; crackle.connect(vinylF);
-
-  const CHORDS = [
-    { root: 'D', keys: ['D3', 'F3', 'A3', 'C4', 'E4'], bass: 'D2', tones: ['D', 'F', 'A', 'C', 'E'] },
-    { root: 'G', keys: ['F3', 'A3', 'B3', 'E4'], bass: 'G1', tones: ['G', 'B', 'D', 'F', 'A', 'E'] },
-    { root: 'C', keys: ['E3', 'G3', 'B3', 'D4'], bass: 'C2', tones: ['C', 'E', 'G', 'B', 'D'] },
-    { root: 'A', keys: ['C3', 'E3', 'G3', 'B3'], bass: 'A1', tones: ['A', 'C', 'E', 'G', 'B'] },
-  ];
-  const KICK = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], KICK2 = [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0];
-
-  // space voices
-  const octaveFor = km => Math.max(2, Math.min(6, Math.round(8.3 - 0.55 * Math.log10(km))));
-  const densityFor = bps => Math.max(1, Math.min(6, Math.round(Math.log10(Math.max(bps, 10)) - 1)));
-  function makeVoice(st) {
-    const pan = new T.Panner(0); const vol = new T.Volume(-60); pan.chain(vol, spaceBus);
-    let inst, drone = null;
-    const v = craftVoice(st.sc);
-    if (v === 'drone') {
-      drone = new T.Synth({ oscillator: { type: 'fatsine', count: 3, spread: 24 }, envelope: { attack: 5, decay: 0, sustain: 1, release: 6 } });
-      const df = new T.AutoFilter(0.05, 300, 2.5).start(); drone.volume.value = -14; drone.chain(df, pan);
-      inst = new T.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 1.4, sustain: 0, release: 1.2 } });
-      inst.volume.value = -12;
-    } else if (v === 'bell') {
-      inst = new T.FMSynth({ harmonicity: 5.07, modulationIndex: 9, envelope: { attack: 0.002, decay: 2.2, sustain: 0, release: 2 },
-        modulationEnvelope: { attack: 0.002, decay: 0.6, sustain: 0, release: 0.6 } });
-      inst.volume.value = -20;
-    } else if (v === 'pluck') {
-      inst = new T.MonoSynth({ oscillator: { type: 'fatsawtooth', count: 2, spread: 12 }, filter: { Q: 2, type: 'lowpass', rolloff: -24 },
-        envelope: { attack: 0.002, decay: 0.9, sustain: 0, release: 0.6 },
-        filterEnvelope: { attack: 0.001, decay: 0.25, sustain: 0, release: 0.3, baseFrequency: 300, octaves: 3.2 } });
-      inst.volume.value = -18;
-    } else {
-      inst = new T.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.6, sustain: 0, release: 0.8 } });
-      inst.volume.value = -16;
-    }
-    inst.connect(pan);
-    vol.volume.rampTo(-4, 3);
-    const seed = hash(st.sc);
-    return { pan, vol, inst, drone, kind: v, pattern: pattern(seed, densityFor(st.down || st.up), 0), seed };
+  /* ---------- streamed audio helper: plays a file without loading it all into memory ---------- */
+  function streamer(dest) {
+    const el = new Audio(); el.preload = 'none'; el.crossOrigin = 'anonymous';
+    const gain = new T.Gain(0); T.connect(ctx.createMediaElementSource(el), gain); gain.connect(dest);
+    return { el, gain };
   }
+
+  /* ---------- lo-fi base: your tracks, shuffled, crossfaded ---------- */
+  const decks = [streamer(musicBus), streamer(musicBus)];
+  const music = { order: [], i: -1, deck: 0, missing: new Set(), key: DEFAULT_KEY, active: false, xfading: false };
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  function nextTrack() {
+    if (radio.st && !radio.st.local) return;
+    const pool = MUSIC.filter(m => !music.missing.has(m.file));
+    if (!pool.length) { music.active = false; startFallback(); return; }
+    if (!music.order.length || music.i >= music.order.length - 1) { music.order = shuffle(pool.slice()); music.i = -1; }
+    const t = music.order[++music.i];
+    const prev = decks[music.deck]; music.deck ^= 1; const d = decks[music.deck];
+    d.el.src = t.file; d.el.currentTime = 0;
+    d.el.onerror = () => { music.missing.add(t.file); music.xfading = false; nextTrack(); };
+    d.el.play().then(() => {
+      music.active = true; music.key = t.key || DEFAULT_KEY; music.xfading = false; stopFallback();
+      d.gain.gain.cancelScheduledValues(T.now()); d.gain.gain.rampTo(1, 4);
+      prev.gain.gain.rampTo(0, 4); setTimeout(() => prev.el.pause(), 4200);
+    }).catch(() => {});
+    d.el.ontimeupdate = () => {
+      if (!music.xfading && d.el.duration && d.el.duration - d.el.currentTime < 5 && decks[music.deck] === d) { music.xfading = true; nextTrack(); }
+    };
+    d.el.onended = () => { if (!music.xfading && decks[music.deck] === d) nextTrack(); };
+  }
+
+  /* ---------- live radio: streamed, never stored ---------- */
+  const radio = { st: null, el: null, web: false, gain: new T.Gain(0), blend: 1, duck: 1, vol: 0.8, token: 0 };
+  radio.gain.connect(musicBus);
+  // without CORS the stream can't pass through the mixer, so its volume is set on the player itself
+  const plainVolume = () => { if (radio.el && !radio.web) radio.el.volume = Math.max(0, Math.min(1, radio.blend * radio.duck * radio.vol)); };
+  function stopRadio() {
+    if (radio.el) { const el = radio.el; el.onerror = el.onplaying = null; el.pause(); el.removeAttribute('src'); el.load(); }
+    radio.el = null; radio.gain.gain.rampTo(0, 0.3);
+  }
+  function stopTracks() { music.active = false; for (const d of decks) { d.gain.gain.rampTo(0, 1); setTimeout(() => d.el.pause(), 1100); } }
+  function tune(station, web = true) {
+    const token = ++radio.token;
+    stopRadio(); radio.st = station;
+    if (station.local) { stationStatus('Your tracks'); nextTrack(); return; }
+    stopTracks(); stationStatus('Tuning in\u2026');
+    const el = new Audio(); el.preload = 'none';
+    if (web) el.crossOrigin = 'anonymous';
+    radio.el = el; radio.web = web;
+    if (web) T.connect(ctx.createMediaElementSource(el), radio.gain);
+    el.onerror = () => {
+      if (token !== radio.token) return;
+      if (web) tune(station, false);
+      else { stationStatus(station.name + ' isn\u2019t reachable right now'); startFallback(); }
+    };
+    el.onplaying = () => {
+      if (token !== radio.token) return;
+      stopFallback(); stationStatus(null, station);
+      if (web) radio.gain.gain.rampTo(1, 3); else plainVolume();
+    };
+    el.src = station.url;
+    if (!web) plainVolume();
+    el.play().catch(() => {});
+  }
+  const setDuck = (v, t) => { duck.gain.rampTo(v, t); radio.duck = v; plainVolume(); };
+  A.tune = i => { A.stationIx = i; if (A.started && A.playing) tune(STATIONS[i]); };
+
+  /* ---------- fallback groove, only when no tracks are found (e.g. this preview) ---------- */
+  const fb = (() => {
+    const bus = new T.Gain(0); const lp = new T.Filter(2600, 'lowpass'); bus.chain(lp, musicBus);
+    const keys = new T.PolySynth(T.Synth, { oscillator: { type: 'triangle' }, envelope: { attack: 0.02, decay: 1.4, sustain: 0.2, release: 1.6 } });
+    keys.maxPolyphony = 8; keys.volume.value = -18; keys.connect(bus);
+    const kick = new T.MembraneSynth({ pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } });
+    kick.volume.value = -10; kick.connect(bus);
+    const hat = new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.03, sustain: 0 } }); hat.volume.value = -30;
+    const hp = new T.Filter(8000, 'highpass'); hat.chain(hp, bus);
+    return { bus, keys, kick, hat, on: false };
+  })();
+  function startFallback() { if (fb.on) return; fb.on = true; fb.bus.gain.rampTo(1, 2); }
+  function stopFallback() { if (!fb.on) return; fb.on = false; fb.bus.gain.rampTo(0, 2); }
+  const FB_CHORDS = [['D3', 'F3', 'A3', 'C4'], ['G2', 'F3', 'Bb3', 'D4'], ['C3', 'E3', 'G3', 'Bb3'], ['A2', 'E3', 'G3', 'C4']];
+
+  /* ---------- spacecraft: four shared instruments, notes in the track's key ---------- */
+  const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const FLATS = { Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#' };
+  const PENTA = [0, 3, 5, 7, 10]; // minor pentatonic: fits almost any lo-fi track in that key
+  const scaleNote = (key, deg, oct) => {
+    const k = key.replace(/m$/, ''); const root = Math.max(0, NOTES.indexOf(FLATS[k] || k)); const n = root + PENTA[((deg % 5) + 5) % 5] + 12 * Math.floor(deg / 5);
+    return NOTES[((n % 12) + 12) % 12] + (oct + Math.floor(n / 12));
+  };
+  const inst = {
+    drone: new T.PolySynth(T.Synth, { oscillator: { type: 'fatsine', count: 2, spread: 18 }, envelope: { attack: 5, decay: 0, sustain: 1, release: 6 } }),
+    bell: new T.PolySynth(T.FMSynth, { harmonicity: 5.07, modulationIndex: 7, envelope: { attack: 0.002, decay: 2, sustain: 0, release: 1.6 },
+      modulationEnvelope: { attack: 0.002, decay: 0.5, sustain: 0, release: 0.5 } }),
+    pluck: new T.PolySynth(T.Synth, { oscillator: { type: 'triangle' }, envelope: { attack: 0.003, decay: 0.7, sustain: 0, release: 0.5 } }),
+    glass: new T.PolySynth(T.Synth, { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 1.2, sustain: 0, release: 1 } }),
+  };
+  inst.drone.volume.value = -22; inst.bell.volume.value = -24; inst.pluck.volume.value = -17; inst.glass.volume.value = -16;
+  for (const k in inst) { inst[k].maxPolyphony = 8; }
+  const droneF = new T.AutoFilter(0.04, 250, 2).start(); inst.drone.chain(droneF, spaceBus);
+  const pluckF = new T.Filter(1800, 'lowpass'); inst.pluck.chain(pluckF, spaceBus);
+  inst.bell.connect(spaceBus); inst.glass.connect(spaceBus);
+  const swoosh = new T.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.6, decay: 0.8, sustain: 0, release: 0.5 } });
+  const swF = new T.Filter(700, 'bandpass'); swoosh.volume.value = -32; swoosh.chain(swF, spaceBus);
+  const chirp = new T.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.25, sustain: 0, release: 0.2 } });
+  chirp.volume.value = -28; chirp.connect(spaceBus);
+
+  const octaveFor = km => Math.max(3, Math.min(6, Math.round(8.3 - 0.55 * Math.log10(km))));
+  const densityFor = bps => Math.max(1, Math.min(4, Math.round(Math.log10(Math.max(bps, 10)) - 1.5)));
   function pattern(seed, density, bar) {
     const r = rng(seed ^ Math.floor(bar / 4) * 2654435761);
-    const prefs = [0, 6, 10, 3, 12, 8, 14, 4, 2, 11, 7, 15];
-    const off = Math.floor(r() * 3);
-    const p = new Set(); for (let i = 0; i < density; i++) p.add((prefs[(i + off) % prefs.length] + (r() < 0.25 ? 1 : 0)) % 16);
+    const prefs = [0, 6, 10, 3, 12, 8, 14, 4], off = Math.floor(r() * 3), p = new Set();
+    for (let i = 0; i < density; i++) p.add(prefs[(i + off) % prefs.length]);
     return p;
   }
+  const drones = new Map(); // link id -> held note
+  const MAX_DRONES = 3;
   A.onLinkStart = st => {
     if (!A.started) return;
-    st.voice = makeVoice(st);
-    // lock-on swoosh
+    st.voice = { kind: craftVoice(st.sc), seed: hash(st.sc), pattern: new Set() };
     const ts = Math.max(T.now() + 0.05, (A.lastSwoosh || 0) + 1.5); A.lastSwoosh = ts;
     swoosh.triggerAttackRelease('1n', ts);
-    if (st.voice.drone) st.voice.drone.triggerAttack(CHORDS[A.chordIx || 0].root + (octaveFor(st.km) - 1), T.now() + 0.1);
+    if (st.voice.kind === 'drone' && drones.size < MAX_DRONES) {
+      const n = scaleNote(music.key, drones.size === 0 ? 0 : drones.size === 1 ? 3 : 2, 2);
+      if (![...drones.values()].includes(n)) { drones.set(st.id, n); inst.drone.triggerAttack(n, T.now() + 0.1); }
+    }
   };
   A.onLinkEnd = st => {
-    const v = st.voice; if (!v) return; st.voice = null;
-    v.vol.volume.rampTo(-60, 3); v.drone?.triggerRelease();
-    setTimeout(() => { v.inst.dispose(); v.drone?.dispose(); v.pan.dispose(); v.vol.dispose(); }, 7000);
+    st.voice = null;
+    const n = drones.get(st.id); if (n) { inst.drone.triggerRelease(n, T.now() + 0.05); drones.delete(st.id); }
   };
-  const swF = new T.AutoFilter(0.3, 200, 4).start();
-  const swoosh = new T.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.6, decay: 0.8, sustain: 0, release: 0.5 } });
-  swoosh.volume.value = -30; swoosh.chain(swF, spaceBus);
-  const chirp = new T.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.25, sustain: 0, release: 0.2 } });
-  chirp.volume.value = -26; chirp.connect(spaceBus);
 
   let step = 0;
   const loop = new T.Loop(time => {
     const s = step % 16, bar = Math.floor(step / 16);
-    const chord = CHORDS[bar % 4]; A.chordIx = bar % 4;
-    // drums
-    const kp = bar % 4 === 3 ? KICK2 : KICK;
-    if (kp[s]) kick.triggerAttackRelease('C1', '8n', time);
-    if (s === 4 || s === 12) snare.triggerAttackRelease('16n', time + 0.012);
-    if (s % 2 === 0) hat.triggerAttackRelease('32n', time, s % 4 === 0 ? 0.9 : 0.5);
-    else if (Math.random() < 0.18) hat.triggerAttackRelease('32n', time, 0.3);
-    if (Math.random() < 0.35) crackle.triggerAttackRelease('64n', time + Math.random() * 0.1, 0.3 + Math.random() * 0.7);
-    // keys + bass
-    if (s === 0) { keys.triggerAttackRelease(chord.keys, '2n.', time + 0.02, 0.7); bass.triggerAttackRelease(chord.bass, '4n.', time); }
-    if (s === 7) keys.triggerAttackRelease(chord.keys.slice(1), '8n', time + 0.03, 0.35);
-    if (s === 10) bass.triggerAttackRelease(chord.bass, '8n', time, 0.6);
-    // space voices
+    if (fb.on) { // fallback groove
+      if (s === 0 || s === 10) fb.kick.triggerAttackRelease('C1', '8n', time);
+      if (s % 2 === 0) fb.hat.triggerAttackRelease('32n', time, s % 4 === 0 ? 0.8 : 0.4);
+      if (s === 0) fb.keys.triggerAttackRelease(FB_CHORDS[bar % 4], '1n', time + 0.02, 0.6);
+    }
+    let fired = 0;
     for (const st of links.values()) {
-      const v = st.voice; if (!v || !st.alive) continue;
-      if (s === 0 && v.drone) v.drone.setNote(chord.root + (octaveFor(st.km) - 1), time);
-      if (s === 0) v.pattern = pattern(v.seed, densityFor(st.down || st.up), bar);
-      const isDrone = v.kind === 'drone';
-      const hits = isDrone ? (s === 0 && bar % 2 === (v.seed & 1)) || (s === 8 && bar % 4 === 1) : v.pattern.has(s);
-      if (hits && st.down) {
-        const r = rng(v.seed + step)();
-        const note = chord.tones[Math.floor(r * chord.tones.length)] + (isDrone ? octaveFor(st.km) + 3 : octaveFor(st.km));
-        v.inst.triggerAttackRelease(note, isDrone ? '2n' : '8n', time, 0.8);
-        T.Draw.schedule(() => { st.hit = 1; flash(st); }, time);
-      }
-      if (st.up && s === 14 && bar % 4 === (v.seed % 4) && A.lastChirp !== step) {
-        A.lastChirp = step;
-        chirp.triggerAttackRelease('A5', '16n', time); chirp.frequency.rampTo('E6', 0.12, time);
-        T.Draw.schedule(() => flash(st, true), time);
-      }
+      const v = st.voice; if (!v || !st.alive || v.kind === 'drone' || !st.down) continue;
+      if (s === 0) v.pattern = pattern(v.seed, densityFor(st.down), bar);
+      if (!v.pattern.has(s) || fired >= 3) continue; // at most 3 notes per step keeps it calm
+      fired++;
+      const deg = Math.floor(rng(v.seed + step)() * 7);
+      inst[v.kind].triggerAttackRelease(scaleNote(music.key, deg, octaveFor(st.km)), v.kind === 'bell' ? '4n' : '8n', time, 0.7);
+      T.Draw.schedule(() => flash(st), time);
+    }
+    // drone craft: an occasional high ping so they show up visually too
+    if (s === 0 && bar % 2 === 0) for (const [id] of drones) {
+      const st = links.get(id); if (!st || !st.alive) continue;
+      if (rng(hash(id) + bar)() < 0.5) { inst.glass.triggerAttackRelease(scaleNote(music.key, 4, 5), '2n', time, 0.4); T.Draw.schedule(() => flash(st), time); }
+    }
+    if (s === 14 && bar % 2 === 0) {
+      const up = [...links.values()].find(l => l.alive && l.up && l.voice && hash(l.sc) % 4 === (bar / 2) % 4);
+      if (up) { chirp.triggerAttackRelease(scaleNote(music.key, 0, 6), '16n', time); T.Draw.schedule(() => flash(up, true), time); }
     }
     step++;
   }, '16n');
 
-  A.start = async () => {
-    await T.start();
-    T.Transport.bpm.value = 74; T.Transport.swing = 0.14; T.Transport.swingSubdivision = '16n';
-    vinyl.start(); loop.start(0); T.Transport.start('+0.1');
-    A.started = true;
-    for (const st of links.values()) if (st.alive && !st.voice) A.onLinkStart(st);
-    A.startRecordings();
-  };
-  A.pause = () => { T.Transport.pause(); vinyl.stop(); };
-  A.resume = () => { T.Transport.start('+0.05'); vinyl.start(); };
-  /* ---------- real space recordings, one at a time at random intervals ---------- */
-  const recBus = new T.Gain(1); const recVerb = new T.Reverb({ decay: 5, wet: 0.25 });
-  const recHP = new T.Filter(90, 'highpass'); recBus.chain(recHP, recVerb, master);
-  const recState = { loaded: [], last: null, timer: null, playing: false };
-  async function loadRecordings() {
-    for (const s of SOUNDS) {
-      try {
-        const res = await fetch(s.file); if (!res.ok) throw new Error(res.status);
-        const buf = new T.ToneAudioBuffer(await T.getContext().decodeAudioData(await res.arrayBuffer()));
-        recState.loaded.push({ ...s, buf });
-      }
-      catch (e) { /* file not added yet: skip it */ }
-    }
-  }
+  /* ---------- space recordings: streamed, one at a time at random intervals ---------- */
+  const rec = streamer(recBus);
+  const recState = { last: null, timer: null, playing: false, missing: new Set() };
   function pickRecording() {
     const onAir = new Set([...links.values()].filter(l => l.alive).map(l => l.sc));
-    const pool = recState.loaded.filter(s => s !== recState.last);
-    if (!pool.length) return recState.loaded[0];
+    const pool = SOUNDS.filter(s => !recState.missing.has(s.file) && s !== recState.last);
+    if (!pool.length) return SOUNDS.find(s => !recState.missing.has(s.file));
     const w = pool.map(s => (s.craft || []).some(c => onAir.has(c)) ? 4 : 1);
     let r = Math.random() * w.reduce((a, b) => a + b, 0);
     for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i]; }
     return pool[pool.length - 1];
   }
-  function playRecording() {
-    if (recState.playing || T.Transport.state !== 'started' || !recState.loaded.length) return;
-    const s = pickRecording(); recState.last = s;
-    const len = Math.min(s.buf.duration, s.maxSeconds || 28);
-    const offset = s.buf.duration > len ? Math.random() * (s.buf.duration - len) : 0;
-    const p = new T.Player(s.buf); p.fadeIn = 2; p.fadeOut = 3; p.volume.value = s.gainDb ?? -8;
-    p.connect(recBus); p.start(T.now() + 0.1, offset, len);
-    duck.gain.rampTo(0.6, 2);
-    recState.playing = true; showHeard(s);
-    setTimeout(() => { duck.gain.rampTo(1, 3); recState.playing = false; showHeard(null); p.dispose(); }, (len + 0.5) * 1000);
+  function playRecording(tries = 0) {
+    if (recState.playing || !A.playing || tries > SOUNDS.length) return;
+    const s = pickRecording(); if (!s) return;
+    const el = rec.el; recState.playing = true;
+    el.onerror = () => { recState.missing.add(s.file); recState.playing = false; playRecording(tries + 1); };
+    el.onloadedmetadata = () => {
+      const len = Math.min(el.duration || 20, s.maxSeconds || 28);
+      el.currentTime = el.duration > len ? Math.random() * (el.duration - len) : 0;
+      el.play().then(() => {
+        recState.last = s; showHeard(s);
+        rec.gain.gain.cancelScheduledValues(T.now());
+        rec.gain.gain.rampTo(s.gain ?? 0.7, 2); setDuck(0.55, 2);
+        clearTimeout(recState.stop);
+        recState.stop = setTimeout(() => {
+          rec.gain.gain.rampTo(0, 3); setDuck(1, 3);
+          setTimeout(() => { el.pause(); recState.playing = false; showHeard(null); }, 3100);
+        }, Math.max(1, len - 3) * 1000);
+      }).catch(() => { recState.playing = false; });
+    };
+    el.src = s.file; el.load();
   }
   function scheduleNext(first) {
     clearTimeout(recState.timer);
-    const wait = first ? 25000 + Math.random() * 20000 : 60000 + Math.random() * 120000; // 1-3 minutes
+    const wait = first ? 25000 + Math.random() * 20000 : 60000 + Math.random() * 120000; // then every 1-3 minutes
     recState.timer = setTimeout(() => { playRecording(); scheduleNext(); }, wait);
   }
-  A.startRecordings = async () => { await loadRecordings(); if (recState.loaded.length) scheduleNext(true); };
 
-  A.setBlend = b => {
-    lofiBus.gain.rampTo(Math.cos(b * Math.PI / 2) * 1.0, 0.2);
-    spaceBus.gain.rampTo(Math.sin(b * Math.PI / 2) * 1.25, 0.2);
-    recBus.gain.rampTo(0.4 + 0.6 * Math.sin(b * Math.PI / 2), 0.2);
+  A.start = async () => {
+    await T.start();
+    T.Transport.bpm.value = 74; T.Transport.swing = 0.12; T.Transport.swingSubdivision = '16n';
+    loop.start(0); T.Transport.start('+0.1');
+    A.started = true; A.playing = true;
+    tune(STATIONS[A.stationIx || 0]);
+    for (const st of links.values()) if (st.alive && !st.voice) A.onLinkStart(st);
+    scheduleNext(true);
   };
-  A.setVol = v => master.volume.rampTo(v <= 0.001 ? -80 : 20 * Math.log10(v) - 4, 0.1);
-  A.setPan = (st, x) => st.voice?.pan.pan.rampTo(Math.max(-0.8, Math.min(0.8, x)), 0.5);
+  A.pause = () => {
+    A.playing = false; T.Transport.pause();
+    for (const d of decks) d.el.pause();
+    stopRadio();
+    if (recState.playing) rec.el.pause();
+  };
+  A.resume = () => {
+    A.playing = true; T.Transport.start('+0.05');
+    if (radio.st?.local) { if (music.active) decks[music.deck].el.play().catch(() => {}); else nextTrack(); }
+    else tune(radio.st || STATIONS[A.stationIx || 0]); // rejoin the live stream
+    if (recState.playing) rec.el.play().catch(() => {});
+  };
+  A.setBlend = b => {
+    musicBus.gain.rampTo(Math.cos(b * Math.PI / 2), 0.2);
+    radio.blend = Math.cos(b * Math.PI / 2); plainVolume();
+    spaceBus.gain.rampTo(Math.sin(b * Math.PI / 2) * 1.2, 0.2);
+    recBus.gain.rampTo(0.45 + 0.55 * Math.sin(b * Math.PI / 2), 0.2);
+  };
+  A.setVol = v => { master.volume.rampTo(v <= 0.001 ? -80 : 20 * Math.log10(v) - 3, 0.1); radio.vol = v; plainVolume(); };
+  A.setPan = () => {};
   return A;
 })();
 
+function stationStatus(text, st) {
+  const el = document.getElementById('stationStatus'); if (!el) return;
+  if (st) el.innerHTML = `Live from <a href="${st.page}" target="_blank" rel="noopener">${st.by}</a>`;
+  else el.textContent = text || '';
+}
 function showHeard(s) {
   const el = document.getElementById('heard');
   if (!s) { el.hidden = true; return; }
@@ -716,6 +813,9 @@ playBtn.addEventListener('click', async () => {
     ? '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/>'
     : '<path d="M7 4.5v15l13-7.5z" fill="currentColor"/>';
 });
+const stationSel = document.getElementById('station');
+STATIONS.forEach((st, i) => stationSel.add(new Option(st.local ? st.name : `${st.name} (${st.by})`, i)));
+stationSel.addEventListener('change', () => audio.tune?.(+stationSel.value));
 const blend = document.getElementById('blend'), vol = document.getElementById('vol');
 blend.addEventListener('input', () => audio.setBlend?.(+blend.value)); audio.setBlend?.(+blend.value);
 vol.addEventListener('input', () => audio.setVol?.(+vol.value)); audio.setVol?.(+vol.value);
