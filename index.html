@@ -115,7 +115,7 @@
   <h1>Deep Space <em>Radio</em></h1>
   <p>Three giant dish sites keep Earth in touch with every spacecraft beyond the Moon. Each link plays an instrument: far away sounds low, more data plays more notes.</p>
   <p class="note" id="note"></p>
-  <p class="note">Music: live radio from SomaFM, listener-supported. Space recordings: NASA, JPL and the University of Iowa. The spacecraft notes follow the live network; the recordings are from past missions.</p>
+  <p class="note">Music: live radio from SomaFM and Nightride FM, both listener-supported. Space recordings: NASA, JPL and the University of Iowa. The spacecraft notes follow the live network; the recordings are from past missions.</p>
 </header>
 
 <aside class="onair" aria-live="polite">
@@ -192,11 +192,28 @@ const DEFAULT_KEY = 'D';
    "My tracks" plays the files listed in MUSIC instead.
 ------------------------------------------------------------------- */
 const STATIONS = [
-  { name: 'Groove Salad', by: 'SomaFM', url: 'https://ice2.somafm.com/groovesalad-128-mp3', page: 'https://somafm.com/groovesalad/' },
-  { name: 'Space Station Soma', by: 'SomaFM', url: 'https://ice2.somafm.com/spacestation-128-mp3', page: 'https://somafm.com/spacestation/' },
-  { name: 'Deep Space One', by: 'SomaFM', url: 'https://ice2.somafm.com/deepspaceone-128-mp3', page: 'https://somafm.com/deepspaceone/' },
-  { name: 'My tracks', local: true },
+  { group: 'Space and ambient', name: 'Space Station Soma', by: 'SomaFM', soma: 'spacestation', page: 'https://somafm.com/spacestation/' },
+  { group: 'Space and ambient', name: 'Mission Control', by: 'SomaFM', soma: 'missioncontrol', page: 'https://somafm.com/missioncontrol/' },
+  { group: 'Space and ambient', name: 'Synphaera', by: 'SomaFM', soma: 'synphaera', mounts: ['128-mp3', '256-mp3', '128-aac'], page: 'https://somafm.com/synphaera/' },
+  { group: 'Space and ambient', name: 'Deep Space One', by: 'SomaFM', soma: 'deepspaceone', page: 'https://somafm.com/deepspaceone/' },
+  { group: 'Space and ambient', name: 'Groove Salad', by: 'SomaFM', soma: 'groovesalad', page: 'https://somafm.com/groovesalad/' },
+  // any other station: { name: 'My station', by: 'Who runs it', urls: ['https://\u2026/stream.mp3'], page: 'https://\u2026' },
+  { group: 'Synthwave and electronic', name: 'Chillsynth', by: 'Nightride FM', urls: ['https://stream.nightride.fm/chillsynth.mp3'], page: 'https://nightride.fm/' },
+  { group: 'Synthwave and electronic', name: 'Datawave', by: 'Nightride FM', urls: ['https://stream.nightride.fm/datawave.mp3'], page: 'https://nightride.fm/' },
+  { group: 'Synthwave and electronic', name: 'Spacesynth', by: 'Nightride FM', urls: ['https://stream.nightride.fm/spacesynth.mp3'], page: 'https://nightride.fm/' },
+  { group: 'Synthwave and electronic', name: 'Nightride (synthwave)', by: 'Nightride FM', urls: ['https://stream.nightride.fm/nightride.mp3'], page: 'https://nightride.fm/' },
+  { group: 'Other', name: 'My tracks', local: true },
 ];
+// SomaFM serves every channel from several servers; if one is down the page tries the next
+const SOMA_SERVERS = ['ice1', 'ice2', 'ice4', 'ice6', 'ice5'];
+const stationUrls = st => {
+  if (st.urls) return st.urls;
+  if (!st.soma) return [st.url];
+  const [first, ...rest] = st.mounts || ['128-mp3', '128-aac'];
+  // the main stream on every server first, then the other formats on the two main servers
+  return [...SOMA_SERVERS.map(h => `https://${h}.somafm.com/${st.soma}-${first}`),
+          ...rest.flatMap(m => SOMA_SERVERS.slice(0, 2).map(h => `https://${h}.somafm.com/${st.soma}-${m}`))];
+};
 const MUSIC = [
   { file: 'music/track1.mp3' },
   { file: 'music/track2.mp3' },
@@ -582,37 +599,59 @@ const audio = (() => {
   }
 
   /* ---------- live radio: streamed, never stored ---------- */
-  const radio = { st: null, el: null, web: false, gain: new T.Gain(0), blend: 1, duck: 1, vol: 0.8, token: 0 };
+  const radio = { st: null, el: null, web: false, timer: null, gain: new T.Gain(0), blend: 1, duck: 1, vol: 0.8, token: 0 };
   radio.gain.connect(musicBus);
   // without CORS the stream can't pass through the mixer, so its volume is set on the player itself
   const plainVolume = () => { if (radio.el && !radio.web) radio.el.volume = Math.max(0, Math.min(1, radio.blend * radio.duck * radio.vol)); };
   function stopRadio() {
     if (radio.el) { const el = radio.el; el.onerror = el.onplaying = null; el.pause(); el.removeAttribute('src'); el.load(); }
+    clearTimeout(radio.timer);
     radio.el = null; radio.gain.gain.rampTo(0, 0.3);
   }
   function stopTracks() { music.active = false; for (const d of decks) { d.gain.gain.rampTo(0, 1); setTimeout(() => d.el.pause(), 1100); } }
-  function tune(station, web = true) {
+  // tries every server; each first through the mixer (needs CORS), then as a plain player
+  function tune(station) {
     const token = ++radio.token;
     stopRadio(); radio.st = station;
     if (station.local) { stationStatus('Your tracks'); nextTrack(); return; }
-    stopTracks(); stationStatus('Tuning in\u2026');
-    const el = new Audio(); el.preload = 'none';
-    if (web) el.crossOrigin = 'anonymous';
-    radio.el = el; radio.web = web;
-    if (web) T.connect(ctx.createMediaElementSource(el), radio.gain);
-    el.onerror = () => {
+    stopTracks();
+    const urls = stationUrls(station);
+    const attempts = urls.flatMap(u => [{ u, web: true }, { u, web: false }]);
+    const errors = [];
+    const tryNext = i => {
       if (token !== radio.token) return;
-      if (web) tune(station, false);
-      else { stationStatus(station.name + ' isn\u2019t reachable right now'); startFallback(); }
+      if (i >= attempts.length) {
+        stationStatus(`${station.name} isn’t reachable (${[...new Set(errors)].join(', ') || 'no response'})`);
+        console.warn('[radio] all attempts failed', station.name, errors);
+        startFallback(); return;
+      }
+      const { u, web } = attempts[i];
+      stopRadio();
+      stationStatus(urls.length > 1 ? `Tuning in… (server ${Math.floor(i / 2) + 1} of ${urls.length})` : 'Tuning in…');
+      const el = new Audio(); el.preload = 'none';
+      if (web) el.crossOrigin = 'anonymous';
+      radio.el = el; radio.web = web;
+      if (web) T.connect(ctx.createMediaElementSource(el), radio.gain);
+      const fail = why => {
+        if (token !== radio.token || radio.el !== el) return;
+        clearTimeout(radio.timer); errors.push(why);
+        console.warn('[radio] failed', u, web ? '(mixer)' : '(plain)', why);
+        tryNext(why === 'timed out' && web ? i + 2 : i + 1); // a server that hangs gets one wait, not two
+      };
+      el.onerror = () => fail(el.error ? (['', 'aborted', 'network error', 'unsupported format', 'blocked or not found'][el.error.code] || 'error') : 'error');
+      el.onplaying = () => {
+        if (token !== radio.token || radio.el !== el) return;
+        clearTimeout(radio.timer);
+        stopFallback(); stationStatus(null, station);
+        console.info('[radio] playing', u, web ? '(mixer)' : '(plain)');
+        if (web) radio.gain.gain.rampTo(1, 3); else plainVolume();
+      };
+      radio.timer = setTimeout(() => fail('timed out'), 8000); // a stalled stream never fires an error
+      el.src = u;
+      if (!web) plainVolume();
+      el.play().catch(e => { if (e && e.name === 'NotAllowedError') fail('autoplay blocked'); });
     };
-    el.onplaying = () => {
-      if (token !== radio.token) return;
-      stopFallback(); stationStatus(null, station);
-      if (web) radio.gain.gain.rampTo(1, 3); else plainVolume();
-    };
-    el.src = station.url;
-    if (!web) plainVolume();
-    el.play().catch(() => {});
+    tryNext(0);
   }
   const setDuck = (v, t) => { duck.gain.rampTo(v, t); radio.duck = v; plainVolume(); };
   A.tune = i => { A.stationIx = i; if (A.started && A.playing) tune(STATIONS[i]); };
@@ -814,7 +853,13 @@ playBtn.addEventListener('click', async () => {
     : '<path d="M7 4.5v15l13-7.5z" fill="currentColor"/>';
 });
 const stationSel = document.getElementById('station');
-STATIONS.forEach((st, i) => stationSel.add(new Option(st.local ? st.name : `${st.name} (${st.by})`, i)));
+{
+  const groups = {};
+  STATIONS.forEach((st, i) => {
+    const g = groups[st.group] || (groups[st.group] = stationSel.appendChild(Object.assign(document.createElement('optgroup'), { label: st.group })));
+    g.appendChild(new Option(st.local ? st.name : `${st.name} (${st.by})`, i));
+  });
+}
 stationSel.addEventListener('change', () => audio.tune?.(+stationSel.value));
 const blend = document.getElementById('blend'), vol = document.getElementById('vol');
 blend.addEventListener('input', () => audio.setBlend?.(+blend.value)); audio.setBlend?.(+blend.value);
