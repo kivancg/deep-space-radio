@@ -48,7 +48,7 @@
   /* speaker icon */
   .spk{width:30px;height:30px;display:block;overflow:visible}
   .spk .body{fill:currentColor}
-  .spk .arc{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;opacity:.25;transition:opacity .6s ease-out}
+  .spk .arc{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;opacity:.22;transition:opacity .6s ease-out}
   .spk.hit .arc{opacity:1;transition:none}
   .spk.hit{filter:drop-shadow(0 0 6px currentColor)}
   .down{color:var(--down)} .up{color:var(--up)}
@@ -146,7 +146,7 @@
 
 <aside class="onair" aria-live="polite">
   <h2>On air now</h2>
-  <p class="sub">Spacecraft currently talking to Earth</p>
+  <p class="sub">Spacecraft currently talking to Earth. Signals pulse as data arrives.</p>
   <p class="heard" id="heard" hidden></p>
   <div id="list"></div>
 </aside>
@@ -390,34 +390,88 @@ const dishComplex = d => {
 /* ---------------- spacecraft (approximate, late 2026) ---------------- */
 const MARS = { ra: 145 * D2R, dec: 14 * D2R };
 const CRAFT = {
+  // deep space
   VGR1: { name: 'Voyager 1', ra: 258.6, dec: 12.0, km: 2.54e10, down: 160, voice: 'drone' },
   VGR2: { name: 'Voyager 2', ra: 302.4, dec: -58.9, km: 2.12e10, down: 160, voice: 'drone' },
   NHPC: { name: 'New Horizons', ra: 291.0, dec: -20.5, km: 9.6e9, down: 1000, voice: 'drone' },
-  JWST: { name: 'Webb Telescope', antiSun: true, km: 1.5e6, down: 28e6, voice: 'bell' },
+  JNO:  { name: 'Juno', planet: 'Jupiter', km: 7.9e8, down: 2.2e4, voice: 'glass' },
+  EURC: { name: 'Europa Clipper', ra: 30, dec: 10, km: 4.0e7, down: 5.0e4, voice: 'glass' },
+  ECLP: { name: 'Europa Clipper', ra: 30, dec: 10, km: 4.0e7, sim: false },
+  PSYC: { name: 'Psyche', ra: 62, dec: 21, km: 3.5e8, down: 2.0e4, voice: 'glass' },
+  LUCY: { name: 'Lucy', ra: 250, dec: -22, km: 5.5e8, down: 1.0e4, voice: 'glass' },
+  JUIC: { name: 'JUICE', sim: false }, ORX: { name: 'OSIRIS-APEX', sim: false }, HYB2: { name: 'Hayabusa2', sim: false },
+  // Mars
   MRO:  { name: 'Mars Reconnaissance Orbiter', mars: true, km: 1.6e8, down: 2.6e6, voice: 'pluck' },
   MVN:  { name: 'MAVEN', mars: true, km: 1.6e8, down: 5.0e5, voice: 'pluck' },
   M20:  { name: 'Perseverance rover', mars: true, km: 1.6e8, down: 3000, voice: 'pluck' },
+  MSL:  { name: 'Curiosity rover', mars: true, sim: false },
+  ODY:  { name: 'Mars Odyssey', mars: true, sim: false },
   MEX:  { name: 'Mars Express', mars: true, km: 1.6e8, down: 2.3e5, voice: 'pluck' },
+  TGO:  { name: 'ExoMars TGO', mars: true, sim: false },
   EMM:  { name: 'Hope Mars Mission', mars: true, km: 1.6e8, down: 3.0e5, voice: 'pluck' },
-  EURC: { name: 'Europa Clipper', ra: 30, dec: 10, km: 4.0e7, down: 5.0e4, voice: 'glass' },
-  PSYC: { name: 'Psyche', ra: 62, dec: 21, km: 3.5e8, down: 2.0e4, voice: 'glass' },
-  LUCY: { name: 'Lucy', ra: 250, dec: -22, km: 5.5e8, down: 1.0e4, voice: 'glass' },
+  ESCB: { name: 'ESCAPADE Blue', sim: false },
+  ESCG: { name: 'ESCAPADE Gold', sim: false },
+  // the Moon
+  LRO:  { name: 'Lunar Reconnaissance Orbiter', moon: true, sim: false },
+  KPLO: { name: 'Danuri lunar orbiter', moon: true, sim: false },
+  CAPS: { name: 'CAPSTONE', moon: true, sim: false },
+  CH2:  { name: 'Chandrayaan-2', moon: true, sim: false }, CHDR: { name: 'Chandrayaan-2', moon: true, sim: false },
+  ARTM: { name: 'ARTEMIS', moon: true, sim: false },
+  // Sun watchers, between Earth and the Sun (Lagrange point 1) or near it
+  SOHO: { name: 'SOHO', sunward: true, sim: false },
+  ACE:  { name: 'ACE', sunward: true, sim: false },
+  WIND: { name: 'Wind', sunward: true, sim: false },
+  DSCO: { name: 'DSCOVR', sunward: true, sim: false },
   SPP:  { name: 'Parker Solar Probe', sunOffset: 9, km: 1.4e8, down: 2.0e5, voice: 'bell' },
   BEPI: { name: 'BepiColombo', sunOffset: -16, km: 1.3e8, down: 5.0e4, voice: 'bell' },
+  SOLO: { name: 'Solar Orbiter', sunOffset: 20, sim: false },
+  STA:  { name: 'STEREO-A', sunOffset: 12, sim: false },
+  // telescopes away from the Sun (Lagrange point 2)
+  JWST: { name: 'Webb Telescope', antiSun: true, km: 1.5e6, down: 28e6, voice: 'bell' },
+  GAIA: { name: 'Gaia', antiSun: true, sim: false }, EUCL: { name: 'Euclid', antiSun: true, sim: false },
+  TESS: { name: 'TESS', sim: false },
 };
+// NASA's own list of spacecraft names, read once from the live feed's config (used for codes not above)
+const FEED_NAMES = {};
+async function loadFeedNames() {
+  if (!FEED_URL) return;
+  try {
+    const res = await fetch(FEED_URL.replace(/dsn\.xml.*$/, 'config.xml'));
+    if (!res.ok) return;
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/xml');
+    for (const el of doc.getElementsByTagName('spacecraft')) {
+      const code = (el.getAttribute('name') || '').toUpperCase(), nice = el.getAttribute('friendlyName');
+      if (code && nice) FEED_NAMES[code] = nice;
+    }
+    for (const st of links.values()) renameLink(st);   // relabel anything already on screen
+  } catch (e) { /* keep the built-in names */ }
+}
+// low-precision Moon position (good to about a degree), for the lunar orbiters
+function moonRaDec(jd = jdNow()) {
+  const d = jd - 2451545.0;
+  const L = (218.316 + 13.176396 * d) * D2R, M = (134.963 + 13.064993 * d) * D2R, F = (93.272 + 13.229350 * d) * D2R;
+  const lam = L + 6.289 * D2R * Math.sin(M), bet = 5.128 * D2R * Math.sin(F), eps = 23.439 * D2R;
+  const x = Math.cos(bet) * Math.cos(lam), y = Math.cos(bet) * Math.sin(lam), z = Math.sin(bet);
+  const ye = y * Math.cos(eps) - z * Math.sin(eps), ze = y * Math.sin(eps) + z * Math.cos(eps);
+  return { ra: Math.atan2(ye, x), dec: Math.asin(ze) };
+}
 function craftDir(code) {
   const c = CRAFT[code];
-  if (!c) { // unknown spacecraft from live feed: stable pseudo-direction
+  if (!c || (c.ra == null && !c.mars && !c.planet && !c.moon && !c.sunward && !c.antiSun && !c.sunOffset)) {
+    // position unknown: a stable made-up direction so the beam doesn't jump around
     let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     return eci((h % 360) * D2R, (((h >> 9) % 120) - 60) * D2R);
   }
   if (c.mars) { const m = planetRaDec('Mars'); return eci(m.ra, m.dec); }
+  if (c.planet) { const p = planetRaDec(c.planet); return eci(p.ra, p.dec); }
+  if (c.moon) { const m = moonRaDec(); return eci(m.ra, m.dec); }
   const s = sunRaDec();
+  if (c.sunward) return eci(s.ra, s.dec);
   if (c.antiSun) return eci(s.ra + Math.PI, -s.dec);
   if (c.sunOffset) return eci(s.ra + c.sunOffset * D2R, s.dec + c.sunOffset * 0.3 * D2R);
   return eci(c.ra * D2R, c.dec * D2R);
 }
-const craftName = code => CRAFT[code]?.name || code;
+const craftName = code => CRAFT[code]?.name || FEED_NAMES[code] || code;
 const craftVoice = code => CRAFT[code]?.voice || 'glass';
 
 /* ---------------- feed: live parser ---------------- */
@@ -440,8 +494,9 @@ function parseDsnXml(text) {
       const km = parseFloat(t.getAttribute('downlegRange')) || parseFloat(t.getAttribute('uplegRange')) || CRAFT[sc]?.km || 1e8;
       links.push({
         id: dish + ':' + sc, dish, complex: station || dishComplex(dish), sc, km,
-        down: d ? (parseFloat(d.getAttribute('dataRate')) || 1) : 0,
-        up: u ? (parseFloat(u.getAttribute('dataRate')) || 1) : 0,
+        hasDown: !!d, hasUp: !!u,
+        down: d ? (parseFloat(d.getAttribute('dataRate')) || 0) : 0,
+        up: u ? (parseFloat(u.getAttribute('dataRate')) || 0) : 0,
       });
     }
   }
@@ -461,7 +516,7 @@ function wantsContact(code, t) {
 function simulateLinks() {
   const g = gmstRad(); const now = Date.now();
   const used = new Set(); const links = [];
-  const order = Object.keys(CRAFT).sort((a, b) => hash(a + Math.floor(now / 600000)) - hash(b + Math.floor(now / 600000)));
+  const order = Object.keys(CRAFT).filter(k => CRAFT[k].sim !== false).sort((a, b) => hash(a + Math.floor(now / 600000)) - hash(b + Math.floor(now / 600000)));
   for (const sc of order) {
     if (!wantsContact(sc, now)) continue;
     const dir = craftDir(sc);
@@ -474,7 +529,8 @@ function simulateLinks() {
     if (!best) continue;
     const dish = COMPLEXES[best].dishes.find(d => !used.has(d)); used.add(dish);
     const c = CRAFT[sc]; const r = rng(hash(sc) ^ Math.floor(now / 300000));
-    links.push({ id: dish + ':' + sc, dish, complex: best, sc, km: c.mars ? planetRaDec('Mars').au * AU_KM : c.km, down: c.down * (0.6 + 0.8 * r()), up: r() < 0.45 ? 2000 : 0 });
+    links.push({ id: dish + ':' + sc, dish, complex: best, sc, km: c.mars ? planetRaDec('Mars').au * AU_KM : c.km, down: c.down * (0.6 + 0.8 * r()), hasDown: true, up: r() < 0.45 ? 2000 : 0 });
+    links[links.length - 1].hasUp = links[links.length - 1].up > 0;
   }
   return links;
 }
@@ -774,13 +830,29 @@ function beamMaterial() {
   });
 }
 
+// radio-signal glyph (a source with waves), not a speaker: it shows activity and isn't a button
 const SPK = (cls) => `<svg class="spk ${cls}" viewBox="0 0 30 30" aria-hidden="true">
-  <path class="body" d="M5 12h4l6-5v16l-6-5H5z"/>
-  <path class="arc" d="M18.5 11.5a5 5 0 0 1 0 7"/><path class="arc" d="M21.5 8.5a9.3 9.3 0 0 1 0 13"/><path class="arc" d="M24.5 5.5a13.5 13.5 0 0 1 0 19"/></svg>`;
+  <circle class="body" cx="8" cy="22" r="2.6"/>
+  <path class="arc" d="M8 15.5a6.5 6.5 0 0 1 6.5 6.5"/><path class="arc" d="M8 10.5a11.5 11.5 0 0 1 11.5 11.5"/><path class="arc" d="M8 5.5a16.5 16.5 0 0 1 16.5 16.5"/></svg>`;
 
 const links = new Map(); // id -> state
 const listEl = document.getElementById('list');
 
+function linkStatus(L) {
+  if (L.hasDown && L.down > 0) return fmtRate(L.down);
+  if (L.hasDown) return 'Tracking';            // carrier only: measuring distance or speed, no data
+  if (L.hasUp) return 'Sending commands';
+  return '';
+}
+function linkTitle(L) {
+  if (L.hasDown && L.down > 0) return 'Receiving data from the spacecraft';
+  if (L.hasDown) return 'Listening to the spacecraft\u2019s signal, no data right now';
+  return 'Sending commands to the spacecraft';
+}
+function renameLink(st) {
+  st.tag.querySelector('span').firstChild.textContent = craftName(st.sc);
+  st.row.querySelector('.who').textContent = craftName(st.sc);
+}
 function fmtRate(bps) {
   if (bps >= 1e6) return (bps / 1e6).toFixed(bps >= 1e7 ? 0 : 1) + ' Mb/s';
   if (bps >= 1e3) return (bps / 1e3).toFixed(bps >= 1e4 ? 0 : 1) + ' kb/s';
@@ -797,21 +869,24 @@ function addLink(L) {
   const mesh = new THREE.Mesh(beamGeo, beamMaterial());
   earth.add(mesh);
   const tag = document.createElement('div'); tag.className = 'tag';
-  const cls = L.down ? 'down' : 'up';
-  tag.innerHTML = SPK(cls) + `<span>${craftName(L.sc)}<small>${fmtRate(L.down || L.up)}</small></span>`;
+  const cls = L.hasDown ? 'down' : 'up';
+  tag.innerHTML = SPK(cls) + `<span>${craftName(L.sc)}<small>${linkStatus(L)}</small></span>`;
   document.getElementById('labels').appendChild(tag);
   const row = document.createElement('div'); row.className = 'link enter';
+  row.title = linkTitle(L);
   row.innerHTML = `<div class="ico">${SPK(cls)}</div><div class="who">${craftName(L.sc)}</div>
     <div class="where">${COMPLEXES[L.complex]?.name || L.complex}, ${L.dish.replace('DSS', 'dish ')}</div>
-    <div class="far"><b>${fmtRate(L.down || L.up)}</b>${fmtLight(L.km)}</div>`;
+    <div class="far"><b>${linkStatus(L)}</b>${fmtLight(L.km)}</div>`;
   listEl.appendChild(row);
   const st = { ...L, mesh, tag, row, fade: 0, alive: true, hit: 0, voice: null };
   links.set(L.id, st);
   audio.onLinkStart?.(st);
 }
 function updateLink(st, L) {
-  Object.assign(st, { down: L.down, up: L.up, km: L.km });
-  st.row.querySelector('.far b').textContent = fmtRate(L.down || L.up);
+  Object.assign(st, { down: L.down, up: L.up, hasDown: L.hasDown, hasUp: L.hasUp, km: L.km });
+  st.row.querySelector('.far b').textContent = linkStatus(st);
+  st.tag.querySelector('small').textContent = linkStatus(st);
+  st.row.title = linkTitle(st);
 }
 function removeLink(st) {
   st.alive = false; audio.onLinkEnd?.(st);
@@ -965,7 +1040,7 @@ const audio = (() => {
       T.Draw.schedule(() => flash(st), time);
     }
     if (s === 14 && bar % 2 === 0) {
-      const up = [...links.values()].find(l => l.alive && l.up && l.voice && hash(l.sc) % 4 === (bar / 2) % 4);
+      const up = [...links.values()].find(l => l.alive && l.hasUp && l.voice && hash(l.sc) % 4 === (bar / 2) % 4);
       if (up) {
         upF.frequency.setValueAtTime(900, time); upF.frequency.exponentialRampToValueAtTime(4200, time + 0.2);
         upN.triggerAttackRelease('16n', time); T.Draw.schedule(() => flash(up, true), time);
@@ -1176,13 +1251,13 @@ function frame(now) {
     st.mesh.position.copy(site).add(off);
     st.mesh.quaternion.setFromUnitVectors(yAxis, dirLocal);
     const u = st.mesh.material.uniforms;
-    u.uFade.value = st.fade; u.uDown.value = st.down ? 1 : 0; u.uUp.value = st.up ? 1 : 0;
+    u.uFade.value = st.fade; u.uDown.value = st.hasDown ? 1 : 0; u.uUp.value = st.hasUp ? 1 : 0;
     u.uSpeed.value = 0.6 + 0.12 * Math.log10(Math.max(st.down, 10));
     st.hit *= Math.pow(0.02, dt); u.uHit.value = st.hit;
     const endW = site.clone().add(dirLocal.clone().multiplyScalar(1.15 + 0.08 * (idx % 3))).applyMatrix4(earth.matrixWorld);
     let [x, y, z] = toScreen(endW);
     const hide = occluded(endW) || z > 1;
-    const maxX = W > 980 ? W - 520 : W - 140;
+    const maxX = W > 980 ? W - 600 : W - 140;   // leave room for the label text before the panel
     x = Math.max(W > 980 ? 420 : 70, Math.min(maxX, x)); y = Math.max(40, Math.min(H - 170, y));
     placed.push({ st, x, y, hide });
     if (panTick > 1) audio.setPan?.(st, (x / W) * 2 - 1);
@@ -1204,7 +1279,7 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-refresh(); setInterval(refresh, POLL_MS);
+refresh(); setInterval(refresh, POLL_MS); loadFeedNames();
 requestAnimationFrame(frame);
 </script>
 </body>
