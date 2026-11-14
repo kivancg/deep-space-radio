@@ -160,21 +160,18 @@ const LAND_DOTS = 'MN8PwjDfaMUw38HIMN8azDDfc88w383SMN8m1jDff9kw39jcMN8x4DDfiuMw3
 
 /* ------------------------------------------------------------------
    SPACE RECORDINGS
-   Put the files in a "sounds" folder next to this page. Any file that
+   Put the files in a "sound" folder next to this page. Any file that
    is missing is skipped, so you can add them a few at a time.
    craft: spacecraft codes that make a clip more likely while on air.
    maxSeconds: longer files play a random excerpt of this length.
 ------------------------------------------------------------------- */
 const SOUNDS = [
-  { file: 'sounds/voyager1-interstellar.mp3', title: 'Voyager 1 in interstellar space', year: '2012–13', craft: ['VGR1'], credit: 'NASA/JPL-Caltech/University of Iowa' },
-  { file: 'sounds/voyager2-uranus.mp3', title: 'Voyager 2 passing Uranus', year: '1986', craft: ['VGR2'], maxSeconds: 25, credit: 'NASA/University of Iowa' },
-  { file: 'sounds/voyager2-neptune.mp3', title: 'Voyager 2 passing Neptune', year: '1989', craft: ['VGR2'], maxSeconds: 25, credit: 'NASA/University of Iowa' },
-  { file: 'sounds/voyager1-jupiter.mp3', title: 'Voyager 1 at Jupiter', year: '1979', craft: ['VGR1'], maxSeconds: 25, credit: 'NASA/University of Iowa' },
-  { file: 'sounds/saturn-radio.mp3', title: 'Saturn’s radio emissions, heard by Cassini', year: '', craft: [], credit: 'NASA/JPL/University of Iowa' },
-  { file: 'sounds/juno-bow-shock.mp3', title: 'Juno crossing Jupiter’s bow shock', year: '2016', craft: [], credit: 'NASA/JPL-Caltech/SwRI/University of Iowa' },
-  { file: 'sounds/ganymede.mp3', title: 'Galileo at Ganymede', year: '1996', craft: [], credit: 'NASA/JPL/University of Iowa' },
-  { file: 'sounds/earth-whistlers.mp3', title: 'Lightning whistlers in Earth’s magnetosphere', year: '', craft: [], credit: 'NASA/University of Iowa' },
-  { file: 'sounds/earth-chorus.mp3', title: 'Earth’s chorus waves', year: '', craft: [], credit: 'NASA/University of Iowa' },
+  { file: 'sound/voyager1.mp4', title: 'Voyager 1 in interstellar space', year: '2012\u201313', craft: ['VGR1'], maxSeconds: 28, credit: 'NASA/JPL-Caltech/University of Iowa' },
+  { file: 'sound/V2PWS_Jupiter_1979-07-02T1556-1645.mp3', title: 'Voyager 2 approaching Jupiter', year: '1979', craft: ['VGR2'], maxSeconds: 25, credit: 'NASA/University of Iowa' },
+  { file: 'sound/cassini-satrun-radiation.wav', title: 'Saturn\u2019s radio emissions, heard by Cassini', year: '', craft: [], maxSeconds: 28, credit: 'NASA/JPL/University of Iowa' },
+  { file: 'sound/sound in mars perseverance rover.wav', title: 'Sounds of Mars, recorded by Perseverance', year: '', craft: ['M20', 'MRO', 'MVN'], maxSeconds: 28, credit: 'NASA/JPL-Caltech' },
+  { file: 'sound/chorus.wav', title: 'Earth\u2019s chorus waves', year: '', craft: [], maxSeconds: 25, credit: 'NASA/University of Iowa' },
+  { file: 'sound/whistler.wav', title: 'Lightning whistlers in Earth\u2019s magnetosphere', year: '', craft: [], maxSeconds: 25, credit: 'NASA/University of Iowa' },
 ];
 
 /* ---------------- astronomy helpers ---------------- */
@@ -649,7 +646,11 @@ const audio = (() => {
   const recState = { loaded: [], last: null, timer: null, playing: false };
   async function loadRecordings() {
     for (const s of SOUNDS) {
-      try { const buf = new T.ToneAudioBuffer(); await buf.load(s.file); recState.loaded.push({ ...s, buf }); }
+      try {
+        const res = await fetch(s.file); if (!res.ok) throw new Error(res.status);
+        const buf = new T.ToneAudioBuffer(await T.getContext().decodeAudioData(await res.arrayBuffer()));
+        recState.loaded.push({ ...s, buf });
+      }
       catch (e) { /* file not added yet: skip it */ }
     }
   }
